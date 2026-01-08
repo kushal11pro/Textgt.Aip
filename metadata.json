@@ -1,5 +1,5 @@
 {
-  "name": "TextGpt",
+  "name": "TextGpt ai",
   "description": "A comprehensive AI workspace featuring Real-time Voice (Live API), Search Grounding, 4K Image Generation, and Multimodal Analysis.",
   "requestFramePermissions": [
     "microphone",

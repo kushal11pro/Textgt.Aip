@@ -1,123 +1,189 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI } from '@google/genai';
-import { Zap, FileText, CheckCheck, Download } from 'lucide-react';
+import { Zap, FileText, CheckCheck, Loader2, Command, Sparkles, Clipboard, RefreshCw, Layers, Plus, Send, X, MessageSquare, Bot } from 'lucide-react';
 import { saveToHistory, loadFromHistory } from '../utils/history';
-import { getApiKey } from '../utils/apiKey';
 
-interface FastLabState {
-    input: string;
-    output: string;
-    mode: 'summarize' | 'grammar';
+const HISTORY_KEY = 'textgpt_fastlab_chat_v3';
+const SYSTEM_LITERALS = "YOU MUST RESPOND USING ONLY ALPHABETIC CHARACTERS AND SPACES. DO NOT USE PUNCTUATION LIKE COLONS HYPHENS SLASHES PARENTHESES OR QUOTES. THE ONLY EXCEPTION IS DURING MATH CALCULATIONS WHERE YOU MAY USE PLUS MINUS MULTIPLY DIVIDE AND EQUALS SYMBOLS. OTHERWISE USE ONLY LETTERS.";
+
+interface ChatMessage {
+  role: 'user' | 'model';
+  text: string;
 }
 
-const HISTORY_KEY = 'textgpt_fastlab_state';
-
 export const FastLab: React.FC = () => {
-  // Load state from history
-  const savedState = loadFromHistory<FastLabState>(HISTORY_KEY, { input: '', output: '', mode: 'summarize' });
-
-  const [input, setInput] = useState(savedState.input);
-  const [output, setOutput] = useState(savedState.output);
-  const [mode, setMode] = useState<'summarize' | 'grammar'>(savedState.mode);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => loadFromHistory(HISTORY_KEY, []));
+  const [input, setInput] = useState('');
+  const [mode, setMode] = useState<'summarize' | 'grammar'>('summarize');
   const [loading, setLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Save on any change
   useEffect(() => {
-    saveToHistory(HISTORY_KEY, { input, output, mode });
-  }, [input, output, mode]);
+    saveToHistory(HISTORY_KEY, messages);
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages]);
 
-  const processText = async () => {
-    if (!input) return;
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      setInput(prev => prev + (prev ? ' ' : '') + `[File content from ${file.name}] ` + content);
+    };
+    reader.readAsText(file);
+  };
 
-    const apiKey = getApiKey();
-    if (!apiKey) {
-      setOutput("API Key missing. Please sign in.");
-      return;
-    }
+  const processText = async (customPrompt?: string) => {
+    const textToProcess = customPrompt || input;
+    if (!textToProcess.trim() || loading) return;
 
+    const userMsg: ChatMessage = { role: 'user', text: textToProcess };
+    setMessages(prev => [...prev, userMsg]);
+    if (!customPrompt) setInput('');
     setLoading(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey });
-      const prompt = mode === 'summarize' 
-        ? `Summarize this text in 2 sentences:\n${input}`
-        : `Fix grammar and make this text more professional:\n${input}`;
 
-      // Use Flash Lite for speed
-      const response = await ai.models.generateContent({
-        model: 'gemini-flash-lite-latest',
-        contents: prompt
-      });
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      let prompt = textToProcess;
       
-      setOutput(response.text || "No output");
+      if (!customPrompt) {
+          prompt = mode === 'summarize' 
+            ? `Synthesize this into a high density executive summary ${textToProcess}` 
+            : `Refine this for professional clarity and flawless grammar ${textToProcess}`;
+      }
+
+      const chat = ai.chats.create({
+        model: 'gemini-3-flash-preview',
+        config: {
+          systemInstruction: `You are an elite linguistic processor. ${SYSTEM_LITERALS}`
+        }
+      });
+
+      const response = await chat.sendMessage({ message: prompt });
+      setMessages(prev => [...prev, { role: 'model', text: response.text || "Stream empty" }]);
     } catch (e) {
-      setOutput("Error processing text.");
+      setMessages(prev => [...prev, { role: 'model', text: "Neural link failure Action cancelled" }]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDownload = () => {
-    if (!output) return;
-    const blob = new Blob([output], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `fast-lab-output-${Date.now()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const clearHistory = () => {
+    if (confirm("Reset processor")) {
+      setMessages([]);
+      saveToHistory(HISTORY_KEY, []);
+    }
   };
 
   return (
-    <div className="h-full bg-slate-900 p-6">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Zap className="text-yellow-400" />
-          Fast Lab
-        </h2>
-        <p className="text-slate-400">High-speed tasks using TextGpt.</p>
-
-        <div className="flex bg-slate-800 p-1 rounded-lg w-fit">
-          <button
-            onClick={() => setMode('summarize')}
-            className={`px-4 py-2 rounded-md flex items-center gap-2 ${mode === 'summarize' ? 'bg-slate-600 text-white' : 'text-slate-400'}`}
-          >
-            <FileText size={16} /> Summarizer
-          </button>
-          <button
-             onClick={() => setMode('grammar')}
-             className={`px-4 py-2 rounded-md flex items-center gap-2 ${mode === 'grammar' ? 'bg-slate-600 text-white' : 'text-slate-400'}`}
-          >
-            <CheckCheck size={16} /> Proofreader
-          </button>
+    <div className="h-full bg-[#020202] flex flex-col overflow-hidden font-sans">
+      {/* Header */}
+      <header className="h-20 shrink-0 px-8 md:px-12 border-b border-white/5 bg-[#050505]/80 backdrop-blur-xl flex items-center justify-between z-10">
+        <div className="flex items-center gap-4">
+          <div className="bg-white/5 p-2 rounded-xl border border-white/10 shadow-lg">
+            <Zap size={20} className="text-white" />
+          </div>
+          <div>
+            <h2 className="text-[11px] font-black uppercase tracking-[0.3em] text-white">Fast Lab</h2>
+            <p className="text-[9px] text-slate-600 font-bold uppercase tracking-widest mt-0.5">Linguistic Utility Engine</p>
+          </div>
         </div>
-
-        <textarea 
-          className="w-full h-40 bg-slate-800 border border-slate-700 rounded-lg p-4 text-white focus:ring-2 focus:ring-yellow-400 focus:outline-none"
-          placeholder="Paste text here..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-        />
-
-        <button
-          onClick={processText}
-          disabled={loading || !input}
-          className="bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50 text-slate-900 font-bold px-6 py-2 rounded-lg"
-        >
-          {loading ? 'Processing...' : 'Run Fast Action'}
-        </button>
-
-        {output && (
-          <div className="bg-slate-800 border-l-4 border-yellow-400 p-4 rounded text-slate-200 relative group">
-            <p className="whitespace-pre-wrap">{output}</p>
+        
+        <div className="flex items-center gap-4">
+          <div className="flex bg-black p-1 rounded-xl border border-white/5">
             <button 
-                onClick={handleDownload}
-                className="absolute top-2 right-2 p-2 bg-slate-700/50 hover:bg-slate-700 rounded text-slate-300 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
-                title="Download Result"
+              onClick={() => setMode('summarize')} 
+              className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${mode === 'summarize' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
             >
-                <Download size={16} />
+              Summarize
+            </button>
+            <button 
+              onClick={() => setMode('grammar')} 
+              className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${mode === 'grammar' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Refine
             </button>
           </div>
+          <button onClick={clearHistory} className="p-2 text-slate-700 hover:text-red-500 transition-colors"><RefreshCw size={16} /></button>
+        </div>
+      </header>
+
+      {/* Chat Area */}
+      <div className="flex-1 overflow-y-auto p-6 md:p-12 space-y-8 custom-scrollbar scroll-smooth bg-[radial-gradient(circle_at_50%_0%,_#0a0a0a_0%,_transparent_100%)]" ref={scrollRef}>
+        {messages.length === 0 && (
+          <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto space-y-6">
+            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/5 text-slate-700">
+               <MessageSquare size={32} />
+            </div>
+            <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.2em] leading-relaxed">
+              Drop text or upload documents below to begin high speed neural processing
+            </p>
+          </div>
         )}
+        
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-4 duration-300`}>
+             <div className={`max-w-[85%] md:max-w-[70%] p-6 rounded-[24px] text-[14px] leading-relaxed ${
+               msg.role === 'user' 
+                ? 'bg-indigo-600 text-white rounded-br-none shadow-xl shadow-indigo-600/10' 
+                : 'bg-[#080808] text-slate-200 border border-white/5 rounded-bl-none obsidian-shadow'
+             }`}>
+               <div className="whitespace-pre-wrap">{msg.text}</div>
+             </div>
+          </div>
+        ))}
+
+        {loading && (
+          <div className="flex justify-start">
+            <div className="bg-[#080808] px-6 py-4 rounded-[24px] rounded-bl-none border border-white/5 flex items-center gap-4 text-indigo-400">
+               <Loader2 size={16} className="animate-spin" />
+               <span className="text-[10px] font-black uppercase tracking-widest animate-pulse">Processing Stream</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Command Well */}
+      <div className="p-6 md:p-10 bg-gradient-to-t from-[#020202] to-transparent shrink-0">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-[#080808] border border-white/10 rounded-[32px] p-4 flex items-end gap-4 obsidian-shadow focus-within:border-indigo-500/30 transition-all">
+            <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".txt,.md,.json" />
+            <button 
+              onClick={() => fileInputRef.current?.click()} 
+              className="w-14 h-14 bg-white/5 hover:bg-white/10 text-slate-400 rounded-full flex items-center justify-center transition-all active:scale-95 shrink-0"
+              title="Add Files (+)"
+            >
+              <div className="flex flex-col items-center">
+                <Plus size={20} />
+                <span className="text-[8px] font-bold mt-0.5">(+)</span>
+              </div>
+            </button>
+            
+            <textarea 
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); processText(); } }}
+              placeholder="Paste text or describe action" 
+              className="flex-1 bg-transparent border-none py-4 text-slate-200 focus:outline-none resize-none max-h-40 min-h-[56px] text-sm leading-relaxed placeholder:text-slate-800"
+              rows={1}
+            />
+
+            <button 
+              onClick={() => processText()}
+              disabled={loading || !input.trim()}
+              className="w-14 h-14 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-20 text-white rounded-full flex items-center justify-center shadow-xl shadow-indigo-600/20 transition-all active:scale-95 shrink-0"
+            >
+              <Send size={20} />
+            </button>
+          </div>
+          
+          <div className="mt-4 flex justify-center gap-6 text-[9px] font-black text-slate-700 uppercase tracking-widest">
+            <span className="flex items-center gap-2"><Sparkles size={10}/> Flash Mode Active</span>
+            <span className="flex items-center gap-2"><Clipboard size={10}/> Fast Send (Enter)</span>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mail, Lock, ArrowRight, ShieldCheck, Loader2, Settings, AlertCircle, ArrowLeft } from 'lucide-react';
 import { UserProfile } from '../types';
+import { Logo } from './Logo';
 
 interface LoginPageProps {
   onLoginSuccess: (profile?: UserProfile) => void;
@@ -203,17 +204,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         ) : (
           <>
             {/* Header */}
-            <div className="p-8 pb-4 text-center">
-              <div className="mx-auto w-12 h-12 bg-gradient-to-br from-indigo-500 to-pink-500 rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-indigo-500/20">
-                  <span className="font-bold text-xl text-white">T</span>
-              </div>
-              <h1 className="text-2xl font-bold text-white mb-2">
-                {step === 'INIT' ? 'Welcome back' : 'Verify Identity'}
+            <div className="p-8 pb-4 text-center flex flex-col items-center">
+              <Logo size={64} className="mb-4 text-white" />
+              <h1 className="text-2xl font-bold text-white mb-2 tracking-tighter">
+                {step === 'INIT' ? 'TextGpt Workspace' : 'Verify Identity'}
               </h1>
               <p className="text-slate-400 text-sm">
                 {step === 'INIT' 
-                  ? 'Sign in to your TextGpt account' 
-                  : `We sent a code to ${email}`
+                  ? 'Sign in to access advanced AI tools' 
+                  : `Enter the code sent to ${email}`
                 }
               </p>
             </div>
@@ -246,7 +245,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
                   <form onSubmit={handleEmailSubmit} className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-xs font-medium text-slate-400 ml-1">Email or Phone</label>
+                      <label className="text-xs font-medium text-slate-400 ml-1 uppercase tracking-widest">Email or Phone</label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-3.5 text-slate-500" size={18} />
                         <input 
@@ -260,7 +259,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-xs font-medium text-slate-400 ml-1">Password</label>
+                      <label className="text-xs font-medium text-slate-400 ml-1 uppercase tracking-widest">Password</label>
                       <div className="relative">
                         <Lock className="absolute left-3 top-3.5 text-slate-500" size={18} />
                         <input 
@@ -278,7 +277,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-indigo-600/20"
                     >
                       {isLoading ? <Loader2 className="animate-spin" size={18} /> : 'Sign In'}
                       {!isLoading && <ArrowRight size={18} />}
@@ -328,9 +327,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             
             {/* Footer */}
             <div className="bg-slate-950/50 px-8 py-4 border-t border-slate-800 flex items-center justify-center gap-6">
-               <div className="flex items-center gap-1 text-xs text-slate-500">
+               <div className="flex items-center gap-1 text-[10px] uppercase tracking-widest font-black text-slate-500">
                   <ShieldCheck size={12} className="text-emerald-500" />
-                  <span>Secure Encrypted Login</span>
+                  <span>Secure Encrypted Environment</span>
                </div>
             </div>
           </>

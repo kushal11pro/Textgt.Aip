@@ -1,6 +1,7 @@
+
 {
-  "name": "TextGpt",
-  "short_name": "TextGpt",
+  "name": "TextGpt ai",
+  "short_name": "TextGpt ai",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",

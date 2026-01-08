@@ -1,260 +1,189 @@
-import React, { useState, useEffect } from 'react';
+
+
+import React, { useState } from 'react';
 import { GoogleGenAI } from '@google/genai';
-import { Video, Clapperboard, Download, Loader2, Clock, Trash2, AlertTriangle } from 'lucide-react';
-import { saveToHistory, loadFromHistory, clearHistory } from '../utils/history';
-import { getApiKey } from '../utils/apiKey';
-
-interface VideoHistoryItem {
-    id: number;
-    prompt: string;
-    videoUri: string;
-    timestamp: number;
-}
-
-const HISTORY_KEY = 'textgpt_video_history';
+import { Video, Download, Loader2, Info, X, Zap, Clapperboard, Film, Play, Maximize2, Monitor, Cpu } from 'lucide-react';
 
 export const VideoGenInterface: React.FC = () => {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [loadingStatus, setLoadingStatus] = useState('');
-  const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
+  const [status, setStatus] = useState('');
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [useHighQuality, setUseHighQuality] = useState(false);
-  
-  const [history, setHistory] = useState<VideoHistoryItem[]>(() => loadFromHistory(HISTORY_KEY, []));
-
-  useEffect(() => {
-    saveToHistory(HISTORY_KEY, history);
-  }, [history]);
 
   const handleGenerate = async () => {
-    if (!prompt.trim()) return;
+    if (!prompt.trim() || isGenerating) return;
 
-    const apiKey = getApiKey();
-    if (!apiKey) {
-      setError("API Key missing. Please sign in.");
-      return;
+    // Mandatory API key selection check for Veo models
+    const win = window as any;
+    if (win.aistudio) {
+      const hasKey = await win.aistudio.hasSelectedApiKey();
+      if (!hasKey) {
+        await win.aistudio.openSelectKey();
+        // Proceeding as per the assumption of successful selection
+      }
     }
 
-    setIsGenerating(true);
-    setError(null);
-    setGeneratedVideo(null);
-    setLoadingStatus('Initializing Veo model...');
+    setIsGenerating(true); setError(null); setVideoUrl(null); setStatus('System Warm-up');
 
     try {
-      // Veo requires a paid key, ensure we handle the selection flow if available
-      const win = window as any;
-      if (win.aistudio) {
-        const hasKey = await win.aistudio.hasSelectedApiKey();
-        if (!hasKey) {
-          await win.aistudio.openSelectKey();
-        }
-      }
-
-      // Create new instance with latest key
-      const ai = new GoogleGenAI({ apiKey });
-      
-      const model = useHighQuality ? 'veo-3.1-generate-preview' : 'veo-3.1-fast-generate-preview';
-      
-      setLoadingStatus('Submitting generation request...');
-      
-      let operation = await ai.models.generateVideos({
-        model: model,
-        prompt: prompt,
-        config: {
+      // Re-initialize GoogleGenAI right before the call to pick up the updated API key
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      setStatus('Linking Veo Motion Engine');
+      // FIXED: Specify numberOfVideos: 1 in the video generation configuration.
+      let op = await ai.models.generateVideos({ 
+        model: 'veo-3.1-fast-generate-preview', 
+        prompt, 
+        config: { 
           numberOfVideos: 1,
-          resolution: '720p', // Veo supports 720p or 1080p
-          aspectRatio: '16:9'
-        }
+          resolution: '720p', 
+          aspectRatio: '16:9' 
+        } 
       });
 
-      setLoadingStatus('Rendering video (this may take a minute)...');
-
-      // Polling loop
-      while (!operation.done) {
-        await new Promise(resolve => setTimeout(resolve, 5000)); // Check every 5 seconds
-        setLoadingStatus('Still rendering...');
-        operation = await ai.operations.getVideosOperation({operation: operation});
+      while (!op.done) {
+        setStatus('Synthesizing Temporal Frames');
+        await new Promise(r => setTimeout(r, 10000));
+        op = await ai.operations.getVideosOperation({ operation: op });
       }
 
-      if (operation.error) {
-         throw new Error((operation.error as any).message || "Video generation failed during processing.");
-      }
-
-      const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
-      
-      if (videoUri) {
-          // IMPORTANT: The URI requires the API key to be appended to fetch/play
-          // We don't download the bytes here to keep it light, we just point the video tag to it.
-          // Note: This exposes the key in the DOM src attribute, which is standard for this client-side demo context.
-          const authenticatedUri = `${videoUri}&key=${apiKey}`;
-          
-          setGeneratedVideo(authenticatedUri);
-          
-          setHistory(prev => {
-             const newItem = { id: Date.now(), prompt, videoUri: authenticatedUri, timestamp: Date.now() };
-             return [newItem, ...prev].slice(0, 5); // Keep last 5
-          });
+      const downloadUri = op.response?.generatedVideos?.[0]?.video?.uri;
+      if (downloadUri) {
+          // Append the API key to the download URL as per guidelines
+          setVideoUrl(`${downloadUri}&key=${process.env.API_KEY}`);
+          setStatus('');
       } else {
-          throw new Error("No video URI returned from the API.");
+          setError("Engine failure: Sequence URI null.");
       }
-
     } catch (err: any) {
-      console.error(err);
-      if (err.message && err.message.includes('Requested entity was not found')) {
-         const win = window as any;
-         if (win.aistudio) {
-            await win.aistudio.openSelectKey();
-            setError("Key selection update required. Please try again.");
-         }
-      } else {
-        setError(err.message || "Generation failed. Please try again.");
+      if (err.message?.includes("Requested entity was not found")) {
+        // Handle race conditions/invalid keys by re-opening the selection dialog
+        const win = window as any;
+        if (win.aistudio) await win.aistudio.openSelectKey();
       }
-    } finally {
-      setIsGenerating(false);
-      setLoadingStatus('');
-    }
-  };
-
-  const clearVideoHistory = () => {
-    if (window.confirm("Clear video history?")) {
-        setHistory([]);
-        clearHistory(HISTORY_KEY);
-    }
+      setError(err.message || "Temporal logic error.");
+    } finally { setIsGenerating(false); if (!videoUrl) setStatus(''); }
   };
 
   return (
-    <div className="h-full bg-slate-900 flex flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-4xl mx-auto space-y-8">
-          <div className="space-y-2">
-            <h2 className="text-3xl font-bold text-white flex items-center gap-2">
-              <Video className="text-purple-500" />
-              Veo Studio
-            </h2>
-            <p className="text-slate-400">Generate 1080p videos from text using Google's Veo model.</p>
-          </div>
-
-          <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-6">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Prompt</label>
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="A cinematic drone shot of a futuristic cyberpunk city in the rain, neon lights reflecting on wet pavement..."
-                className="w-full h-32 bg-slate-900 border border-slate-700 rounded-lg p-4 text-white focus:ring-2 focus:ring-purple-500 focus:outline-none resize-none"
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-               <div className="flex items-center gap-2">
-                   <input 
-                     type="checkbox" 
-                     id="hq" 
-                     checked={useHighQuality} 
-                     onChange={(e) => setUseHighQuality(e.target.checked)}
-                     className="w-4 h-4 rounded border-slate-600 text-purple-600 focus:ring-purple-500 bg-slate-700"
-                   />
-                   <label htmlFor="hq" className="text-sm text-slate-300 cursor-pointer select-none">
-                       High Quality Mode (Slower)
-                   </label>
-               </div>
-
-               <button
-                  onClick={handleGenerate}
-                  disabled={isGenerating || !prompt}
-                  className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg hover:shadow-purple-500/20"
-                >
-                  {isGenerating ? (
-                    <>
-                       <Loader2 className="animate-spin" size={20} />
-                       Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Clapperboard size={20} />
-                      Generate Video
-                    </>
-                  )}
-                </button>
-            </div>
-            
-             <p className="text-xs text-amber-400/80 flex items-center gap-1">
-               <AlertTriangle size={12} /> Veo requires a paid API key project. Generation may take 1-2 minutes.
-             </p>
-          </div>
-
-          {isGenerating && (
-             <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-8 flex flex-col items-center justify-center text-center space-y-4 animate-pulse">
-                 <Loader2 className="animate-spin text-purple-500" size={48} />
-                 <p className="text-slate-300 font-medium">{loadingStatus}</p>
-                 <p className="text-xs text-slate-500">Please do not close this tab.</p>
-             </div>
-          )}
-
-          {error && (
-            <div className="bg-red-900/20 border border-red-500/50 text-red-200 p-4 rounded-lg">
-              {error}
-            </div>
-          )}
-
-          {generatedVideo && (
-            <div className="bg-slate-800 rounded-2xl p-2 border border-slate-700 shadow-2xl space-y-2">
-               <div className="relative aspect-video bg-black rounded-xl overflow-hidden">
-                  <video 
-                    src={generatedVideo} 
-                    controls 
-                    autoPlay 
-                    loop 
-                    className="w-full h-full object-contain"
-                  />
-               </div>
-               <div className="p-2 flex justify-end">
-                  <a 
-                    href={generatedVideo} 
-                    download={`veo-generation-${Date.now()}.mp4`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-slate-300 hover:text-white text-sm"
-                  >
-                      <Download size={16} /> Download MP4
-                  </a>
-               </div>
-            </div>
-          )}
-        </div>
+    <div className="h-full bg-[#020202] flex flex-col overflow-hidden font-sans relative">
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-indigo-900/10 to-transparent" />
       </div>
 
-      {/* History Panel */}
-      {history.length > 0 && (
-          <div className="border-t border-slate-800 bg-slate-900 p-4 shrink-0">
-             <div className="max-w-4xl mx-auto">
-                 <div className="flex justify-between items-center mb-2">
-                     <h3 className="text-xs font-bold uppercase text-slate-500 flex items-center gap-1">
-                         <Clock size={12} /> Video History
-                     </h3>
-                     <button onClick={clearVideoHistory} className="text-slate-600 hover:text-red-400">
-                         <Trash2 size={12} />
-                     </button>
+      <div className="flex-1 overflow-y-auto p-6 md:p-12 custom-scrollbar relative z-10">
+        <div className="max-w-5xl mx-auto space-y-16">
+          
+          <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-white/5 pb-10">
+            <div className="space-y-2">
+              <div className="flex items-center gap-4">
+                 <div className="bg-white/5 p-3 rounded-2xl border border-white/10 shadow-xl">
+                   <Film size={32} className="text-white" />
                  </div>
-                 <div className="flex gap-4 overflow-x-auto pb-2">
-                     {history.map(item => (
-                         <div key={item.id} className="relative group shrink-0 w-48 cursor-pointer" onClick={() => { setGeneratedVideo(item.videoUri); setPrompt(item.prompt); }}>
-                             <div className="w-48 h-28 bg-black rounded-lg border border-slate-700 flex items-center justify-center overflow-hidden relative">
-                                <video src={item.videoUri} className="w-full h-full object-cover opacity-50 group-hover:opacity-100 transition-opacity" muted />
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                    <Clapperboard className="text-white opacity-80" />
-                                </div>
-                             </div>
-                             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center pointer-events-none">
-                                 <span className="text-xs text-white p-2 text-center line-clamp-3">{item.prompt}</span>
-                             </div>
-                         </div>
-                     ))}
+                 <h2 className="text-5xl font-black text-white tracking-tighter uppercase italic">Veo Motion</h2>
+              </div>
+              <p className="text-slate-600 text-[11px] font-black uppercase tracking-[0.4em] ml-1">Cinematic Neural Production Engine</p>
+            </div>
+            <div className="flex gap-8">
+               <div className="flex flex-col items-center">
+                  <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest mb-1">Standard</span>
+                  <span className="text-xs font-bold text-white px-3 py-1 bg-white/5 rounded-lg border border-white/10">720P HD</span>
+               </div>
+               <div className="flex flex-col items-center">
+                  <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest mb-1">Compute</span>
+                  <span className="text-xs font-bold text-indigo-400 px-3 py-1 bg-indigo-500/10 rounded-lg border border-indigo-500/10 flex items-center gap-2"><Cpu size={12}/> VEO-3.1</span>
+               </div>
+            </div>
+          </header>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+            
+            <div className="lg:col-span-4 space-y-8">
+               <div className="bg-[#050505] border border-white/5 rounded-[32px] p-8 space-y-8 obsidian-shadow">
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Motion Prompt</label>
+                    <textarea 
+                      value={prompt} 
+                      onChange={e => setPrompt(e.target.value)} 
+                      placeholder="High-speed chase through a neon-lit cyber city..." 
+                      className="w-full h-48 bg-[#0a0a0a] border border-white/5 rounded-2xl p-6 text-sm text-slate-200 focus:ring-1 focus:ring-indigo-500 outline-none resize-none transition-all placeholder:text-slate-800" 
+                    />
+                  </div>
+                  <button 
+                    onClick={handleGenerate} 
+                    disabled={isGenerating || !prompt.trim()} 
+                    className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-20 text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] transition-all active:scale-95 shadow-2xl shadow-indigo-600/20 flex items-center justify-center gap-3"
+                  >
+                    {isGenerating ? <Loader2 className="animate-spin" size={20} /> : <Clapperboard size={20} />}
+                    {isGenerating ? 'Synthesizing...' : 'Action'}
+                  </button>
+               </div>
+
+               {error && (
+                 <div className="p-6 bg-red-900/10 border border-red-500/20 rounded-[24px] flex flex-col gap-2 animate-in slide-in-from-left-4">
+                    <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">Production Error</p>
+                    <p className="text-xs text-red-400 font-medium leading-relaxed">{error}</p>
                  </div>
-             </div>
+               )}
+            </div>
+
+            <div className="lg:col-span-8 flex flex-col gap-8">
+               {!videoUrl && !isGenerating && (
+                 <div className="aspect-video bg-[#050505] border border-white/5 border-dashed rounded-[40px] flex flex-col items-center justify-center text-center p-12 space-y-6">
+                    <div className="w-24 h-24 bg-white/5 rounded-[48px] flex items-center justify-center border border-white/10">
+                      <Monitor size={40} className="text-slate-800" />
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-black text-white uppercase tracking-tighter">Production Stage</h4>
+                      <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest mt-2">Ready for cinematic sequence input</p>
+                    </div>
+                 </div>
+               )}
+
+               {isGenerating && (
+                 <div className="aspect-video bg-[#050505] border border-white/10 rounded-[40px] flex flex-col items-center justify-center space-y-10 obsidian-shadow animate-pulse">
+                    <div className="relative">
+                      <div className="w-24 h-24 border-4 border-indigo-600/20 border-t-indigo-500 rounded-full animate-spin"></div>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Play size={32} className="text-indigo-400 fill-indigo-400 opacity-50" />
+                      </div>
+                    </div>
+                    <div className="text-center space-y-3">
+                       <p className="text-white font-black text-lg uppercase tracking-tighter">{status}</p>
+                       <p className="text-[9px] text-slate-600 font-black uppercase tracking-[0.4em]">Rendering Temporal Consistency</p>
+                    </div>
+                 </div>
+               )}
+
+               {videoUrl && !isGenerating && (
+                 <div className="space-y-6 animate-in zoom-in duration-1000">
+                    <div className="bg-[#050505] rounded-[48px] overflow-hidden border border-white/10 obsidian-shadow aspect-video relative group">
+                       <video src={videoUrl} controls autoPlay className="w-full h-full object-cover" />
+                       <div className="absolute top-6 right-6 p-4 bg-black/50 backdrop-blur-xl rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity border border-white/10">
+                          <Maximize2 size={24} className="text-white cursor-pointer" />
+                       </div>
+                    </div>
+                    <div className="flex justify-between items-center bg-[#050505] border border-white/5 p-6 rounded-[32px]">
+                       <div className="flex gap-8">
+                          <div className="flex flex-col">
+                             <span className="text-[9px] font-black text-slate-700 uppercase tracking-widest">Format</span>
+                             <span className="text-xs font-bold text-white">MP4 / H.264</span>
+                          </div>
+                          <div className="flex flex-col">
+                             <span className="text-[9px] font-black text-slate-700 uppercase tracking-widest">Duration</span>
+                             <span className="text-xs font-bold text-white">6 Seconds</span>
+                          </div>
+                       </div>
+                       <a href={videoUrl} download="textgpt-motion.mp4" className="bg-white hover:bg-slate-200 text-black px-8 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-3 transition-all active:scale-95 shadow-2xl shadow-white/5">
+                          <Download size={18} /> Export Sequence
+                       </a>
+                    </div>
+                 </div>
+               )}
+            </div>
           </div>
-      )}
+        </div>
+      </div>
     </div>
   );
 };

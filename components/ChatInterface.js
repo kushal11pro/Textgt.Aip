@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
-import { Send, Globe, Paperclip, X, MessageCircle } from 'lucide-react';
-import { Logo } from './Logo';
-
-const SYSTEM_LITERALS = "YOU MUST RESPOND USING ONLY ALPHABETIC CHARACTERS AND SPACES. DO NOT USE PUNCTUATION LIKE COLONS HYPHENS SLASHES PARENTHESES OR QUOTES. THE ONLY EXCEPTION IS DURING MATH CALCULATIONS WHERE YOU MAY USE PLUS MINUS MULTIPLY DIVIDE AND EQUALS SYMBOLS. OTHERWISE USE ONLY LETTERS.";
+import { Send, Globe, Loader2, Paperclip, X, MessageCircle } from 'lucide-react';
+import { SYSTEM_LITERALS } from '../constants.js';
+import { Logo } from './Logo.js';
 
 export const ChatInterface = ({ onCodeRequest }) => {
   const [messages, setMessages] = useState([]);
@@ -24,10 +23,7 @@ export const ChatInterface = ({ onCodeRequest }) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result;
-        // Fix: result is string | ArrayBuffer. Only strings have the split method.
-        if (typeof result === 'string') {
-          setAttachment({ data: result.split(',')[1], mimeType: file.type, url: result });
-        }
+        setAttachment({ data: result.split(',')[1], mimeType: file.type, url: result });
       };
       reader.readAsDataURL(file);
     }
@@ -36,7 +32,7 @@ export const ChatInterface = ({ onCodeRequest }) => {
   const handleSend = async () => {
     if ((!input.trim() && !attachment) || isLoading) return;
     
-    const userMsg = { role: 'user', text: input, attachment: attachment ? { ...attachment } : null };
+    const userMsg = { role: 'user', text: input, attachment: attachment ? { ...attachment } : null, timestamp: Date.now() };
     setMessages(p => [...p, userMsg]);
     setInput('');
     setAttachment(null);
@@ -45,8 +41,7 @@ export const ChatInterface = ({ onCodeRequest }) => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const model = useSearch ? 'gemini-3-flash-preview' : 'gemini-3-pro-preview';
-      // Fix: config is inferred to only have systemInstruction. Explicit typing allows optional tools property.
-      const config: { systemInstruction: string; tools?: any[] } = { systemInstruction: `You are TextGpt ai. ${SYSTEM_LITERALS}` };
+      const config = { systemInstruction: `You are TextGpt ai. ${SYSTEM_LITERALS}` };
       if (useSearch) config.tools = [{ googleSearch: {} }];
 
       const chat = ai.chats.create({ model, config });
@@ -57,16 +52,16 @@ export const ChatInterface = ({ onCodeRequest }) => {
       const sources = [];
       response.candidates?.[0]?.groundingMetadata?.groundingChunks?.forEach(c => { if (c.web) sources.push({ title: c.web.title, uri: c.web.uri }); });
 
-      setMessages(p => [...p, { role: 'model', text: response.text, sources }]);
+      setMessages(p => [...p, { role: 'model', text: response.text, sources, timestamp: Date.now() }]);
     } catch (error) {
-      setMessages(p => [...p, { role: 'model', text: "NEURAL_LINK_TIMEOUT" }]);
+      setMessages(p => [...p, { role: 'model', text: "NEURAL_LINK_TIMEOUT", timestamp: Date.now() }]);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#020202] relative">
+    <div className="flex flex-col h-full bg-[#020202] text-[#f8fafc] relative">
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex bg-[#080808] border border-white/5 p-1 rounded-full obsidian-shadow">
          <button onClick={() => setUseSearch(true)} className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${useSearch ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-600 hover:text-white'}`}>Web Grounded</button>
          <button onClick={() => setUseSearch(false)} className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${!useSearch ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-600 hover:text-white'}`}>Core Node</button>

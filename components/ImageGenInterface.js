@@ -1,21 +1,18 @@
-
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
-// Added X to imports to fix "Cannot find name 'X'" error
-import { Image as ImageIcon, Download, Zap, Key, Clock, Trash2, Maximize2, Layers, Sparkles, ChevronRight, Share2, X } from 'lucide-react';
-import { ImageResolution } from '../types';
-import { saveToHistory, loadFromHistory, clearHistory } from '../utils/history';
+import { Image as ImageIcon, Download, Zap, Key, Clock, Trash2, Maximize2, Layers, Sparkles, ChevronRight, Share2, X, Loader2 } from 'lucide-react';
+import { ImageResolution } from '../constants.js';
+import { saveToHistory, loadFromHistory } from '../utils/history.js';
 
-interface HistoryItem { id: number; prompt: string; image: string; timestamp: number; }
 const HISTORY_KEY = 'textgpt_image_history_v3';
 
-export const ImageGenInterface: React.FC = () => {
+export const ImageGenInterface = () => {
   const [prompt, setPrompt] = useState('');
-  const [resolution, setResolution] = useState<ImageResolution>(ImageResolution.RES_1K);
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [resolution, setResolution] = useState(ImageResolution.RES_1K);
+  const [generatedImage, setGeneratedImage] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>(() => loadFromHistory(HISTORY_KEY, []));
+  const [error, setError] = useState(null);
+  const [history, setHistory] = useState(() => loadFromHistory(HISTORY_KEY, []));
 
   useEffect(() => { saveToHistory(HISTORY_KEY, history); }, [history]);
 
@@ -25,23 +22,20 @@ export const ImageGenInterface: React.FC = () => {
 
     try {
       let model = 'gemini-2.5-flash-image';
-      let imageConfig: any = { aspectRatio: '1:1' };
+      let imageConfig = { aspectRatio: '1:1' };
 
-      // Mandatory API key selection for Pro model as per guidelines
       if (resolution !== ImageResolution.RES_1K) {
-        const win = window as any;
+        const win = window;
         if (win.aistudio) {
           const hasKey = await win.aistudio.hasSelectedApiKey();
           if (!hasKey) {
             await win.aistudio.openSelectKey();
-            // Proceed immediately as per race condition guidelines
           }
         }
         model = 'gemini-3-pro-image-preview';
         imageConfig.imageSize = resolution;
       }
 
-      // Create a fresh instance to ensure the latest API key is used
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model,
@@ -50,10 +44,12 @@ export const ImageGenInterface: React.FC = () => {
       });
 
       let dataUrl = '';
-      // Iterating through all parts to find the image part as per guidelines
       if (response.candidates?.[0]?.content?.parts) {
         for (const part of response.candidates[0].content.parts) {
-          if (part.inlineData) { dataUrl = `data:image/png;base64,${part.inlineData.data}`; break; }
+          if (part.inlineData) { 
+            dataUrl = `data:image/png;base64,${part.inlineData.data}`; 
+            break; 
+          }
         }
       }
 
@@ -63,25 +59,22 @@ export const ImageGenInterface: React.FC = () => {
       } else {
         setError('Synthesis engine returned null data.');
       }
-    } catch (err: any) {
+    } catch (err) {
       if (err.message?.includes("Requested entity was not found")) {
-        // Reset key selection if required as per guidelines
-        const win = window as any;
+        const win = window;
         if (win.aistudio) await win.aistudio.openSelectKey();
       }
-      setError("Forge Interruption: Check system link and credentials.");
+      setError("Forge Interruption: Check system link.");
     } finally { setIsLoading(false); }
   };
 
   return (
     <div className="h-full bg-[#020202] flex flex-col overflow-hidden font-sans">
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        
-        {/* Control Panel */}
-        <aside className="w-full lg:w-[420px] border-r border-white/5 bg-[#050505] p-8 space-y-10 overflow-y-auto custom-scrollbar shrink-0">
+        <aside className="w-full lg:w-[420px] border-r border-white/5 bg-[#050505] p-8 space-y-10 overflow-y-auto shrink-0">
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <div className="bg-indigo-600/10 p-2 rounded-xl border border-indigo-500/20 shadow-lg shadow-indigo-500/5">
+              <div className="bg-indigo-600/10 p-2 rounded-xl border border-indigo-500/20 shadow-lg">
                 <Layers size={20} className="text-indigo-400" />
               </div>
               <h2 className="text-sm font-black uppercase tracking-[0.3em] text-white">Forge Studio</h2>
@@ -108,7 +101,7 @@ export const ImageGenInterface: React.FC = () => {
                     key={res} 
                     onClick={() => setResolution(res)} 
                     className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                      resolution === res ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-600 hover:text-slate-300 hover:bg-white/5'
+                      resolution === res ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-600 hover:text-slate-300 hover:bg-white/5'
                     }`}
                   >
                     {res}
@@ -120,7 +113,7 @@ export const ImageGenInterface: React.FC = () => {
             <button 
               onClick={handleGenerate} 
               disabled={isLoading || !prompt} 
-              className="w-full bg-white hover:bg-slate-200 disabled:opacity-20 text-black py-5 rounded-2xl font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-95 shadow-2xl shadow-white/5"
+              className="w-full bg-white hover:bg-slate-200 disabled:opacity-20 text-black py-5 rounded-2xl font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-95 shadow-2xl"
             >
               {isLoading ? <Loader2 className="animate-spin" size={20} /> : <Zap size={20} fill="currentColor" />}
               {isLoading ? 'Synthesizing...' : 'Ignite Forge'}
@@ -128,17 +121,16 @@ export const ImageGenInterface: React.FC = () => {
           </div>
 
           {error && (
-            <div className="p-4 bg-red-900/10 border border-red-500/20 rounded-2xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+            <div className="p-4 bg-red-900/10 border border-red-500/20 rounded-2xl flex items-start gap-3">
               <X size={16} className="text-red-500 mt-0.5 shrink-0" />
               <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest leading-relaxed">{error}</p>
             </div>
           )}
 
-          {/* Mini History Sidebar Section */}
           <div className="space-y-4 pt-6 border-t border-white/5">
              <div className="flex items-center justify-between">
                <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Previous Works</h3>
-               <button onClick={() => setHistory([])} className="text-slate-700 hover:text-red-400 transition-colors"><Trash2 size={14}/></button>
+               <button onClick={() => setHistory([])} className="text-slate-700 hover:text-red-400"><Trash2 size={14}/></button>
              </div>
              <div className="grid grid-cols-4 gap-2">
                {history.map(item => (
@@ -154,15 +146,14 @@ export const ImageGenInterface: React.FC = () => {
           </div>
         </aside>
 
-        {/* Preview Workspace */}
         <main className="flex-1 bg-[#020202] flex flex-col items-center justify-center p-8 lg:p-16 relative overflow-hidden">
           <div className="absolute inset-0 opacity-20 pointer-events-none">
             <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,_#4338ca_0%,_transparent_70%)]" />
           </div>
 
           {!generatedImage && !isLoading && (
-            <div className="text-center space-y-6 relative animate-in fade-in zoom-in duration-1000">
-               <div className="w-24 h-24 bg-indigo-600/5 rounded-[48px] flex items-center justify-center border border-indigo-500/10 mx-auto shadow-3xl">
+            <div className="text-center space-y-6 relative">
+               <div className="w-24 h-24 bg-indigo-600/5 rounded-[48px] flex items-center justify-center border border-indigo-500/10 mx-auto">
                  <ImageIcon size={40} className="text-indigo-900" />
                </div>
                <div>
@@ -173,7 +164,7 @@ export const ImageGenInterface: React.FC = () => {
           )}
 
           {isLoading && (
-            <div className="relative w-full max-w-2xl aspect-square flex flex-col items-center justify-center border border-white/10 rounded-[40px] obsidian-shadow animate-pulse overflow-hidden bg-white/5">
+            <div className="relative w-full max-w-2xl aspect-square flex flex-col items-center justify-center border border-white/10 rounded-[40px] obsidian-shadow animate-pulse bg-white/5">
                <div className="absolute inset-0 flex items-center justify-center">
                   <div className="w-40 h-40 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
                </div>
@@ -182,7 +173,7 @@ export const ImageGenInterface: React.FC = () => {
           )}
 
           {generatedImage && !isLoading && (
-            <div className="w-full max-w-2xl animate-in zoom-in duration-700 relative group">
+            <div className="w-full max-w-2xl relative group">
                <div className="absolute -inset-1 bg-indigo-600 opacity-20 blur-2xl group-hover:opacity-40 transition-opacity rounded-[40px]" />
                <div className="relative bg-[#050505] rounded-[40px] overflow-hidden border border-white/10 obsidian-shadow">
                   <img src={generatedImage} className="w-full aspect-square object-cover" alt="Synthesized" />
@@ -196,7 +187,7 @@ export const ImageGenInterface: React.FC = () => {
                         <a 
                           href={generatedImage} 
                           download={`textgpt-${Date.now()}.png`}
-                          className="p-3 bg-indigo-600 hover:bg-indigo-500 rounded-full text-white transition-all shadow-xl shadow-indigo-600/20"
+                          className="p-3 bg-indigo-600 hover:bg-indigo-500 rounded-full text-white shadow-xl"
                         >
                           <Download size={20} />
                         </a>
@@ -210,9 +201,3 @@ export const ImageGenInterface: React.FC = () => {
     </div>
   );
 };
-
-const Loader2 = ({ className, size }: { className?: string, size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-  </svg>
-);

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Key, X, Check, ExternalLink } from 'lucide-react';
-import { getApiKey, setApiKey, hasValidKey } from '../utils/apiKey';
+import React from 'react';
+import { Key, X, ExternalLink, ShieldCheck } from 'lucide-react';
+import { hasValidKey } from '../utils/apiKey';
 
 interface ApiKeyModalProps {
   isOpen: boolean;
@@ -9,80 +9,67 @@ interface ApiKeyModalProps {
 }
 
 export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSuccess }) => {
-  const [key, setKey] = useState('');
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (isOpen) {
-      setKey(getApiKey());
-    }
-  }, [isOpen]);
-
   if (!isOpen) return null;
 
-  const handleSave = () => {
-    if (!key.trim()) {
-      setError('API Key cannot be empty');
-      return;
+  const handleSelectKeyFromStudio = async () => {
+    const win = window as any;
+    if (win.aistudio) {
+      await win.aistudio.openSelectKey();
+      onSuccess();
+      onClose();
     }
-    setApiKey(key.trim());
-    onSuccess();
-    onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
-        <div className="p-6 space-y-6">
+    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
+        <div className="p-6 md:p-8 space-y-6">
           <div className="flex justify-between items-start">
-            <div className="space-y-1">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <div className="space-y-2">
+              <div className="w-12 h-12 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl flex items-center justify-center mb-2">
                 <Key className="text-indigo-400" size={24} />
-                API Key Required
+              </div>
+              <h2 className="text-xl font-black text-white uppercase tracking-tight">
+                Model Access
               </h2>
-              <p className="text-sm text-slate-400">
-                Enter your Google Gemini API key to continue.
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Connect your Gemini API key to unlock the full potential of TextGpt, including multimodal analysis and video generation.
               </p>
             </div>
             {hasValidKey() && (
-              <button onClick={onClose} className="text-slate-500 hover:text-white">
+              <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full text-slate-500 hover:text-white transition-colors">
                 <X size={20} />
               </button>
             )}
           </div>
 
           <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-500 uppercase">Your API Key</label>
-              <input
-                type="password"
-                value={key}
-                onChange={(e) => {
-                  setKey(e.target.value);
-                  setError('');
-                }}
-                placeholder="AIzaSy..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
-              />
-              {error && <p className="text-red-400 text-xs">{error}</p>}
+            <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800 space-y-3">
+              <div className="flex items-center gap-2 text-[10px] font-black text-indigo-400 uppercase tracking-widest">
+                <ShieldCheck size={14} />
+                Secure Connection
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Your key is stored only in your browser's environment and is never transmitted to our servers. High-tier features like Veo 3.1 may require a project with billing enabled.
+              </p>
             </div>
 
             <button
-              onClick={handleSave}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors"
+              onClick={handleSelectKeyFromStudio}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-4 rounded-xl flex items-center justify-center gap-3 transition-all shadow-xl shadow-indigo-600/10 active:scale-95"
             >
-              <Check size={18} />
-              Save & Continue
+              <Key size={18} />
+              Select API Key
             </button>
 
             <div className="pt-4 border-t border-slate-800 text-center">
               <a 
-                href="https://aistudio.google.com/app/apikey" 
+                href="https://ai.google.dev/gemini-api/docs/billing" 
                 target="_blank" 
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300"
+                className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-500 hover:text-indigo-400 transition-colors uppercase tracking-widest"
               >
-                Get a free API Key from Google AI Studio <ExternalLink size={10} />
+                Billing & Limits Documentation <ExternalLink size={10} />
               </a>
             </div>
           </div>
