@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MessageCircle, Mic, Image as ImageIcon, Eye, Zap, Menu, X, FileCode, Video, Key, ChevronLeft, ChevronRight, Settings, Command } from 'lucide-react';
+import { AppMode } from './constants';
 import { ChatInterface } from './components/ChatInterface';
 import { LiveSession } from './components/LiveSession';
 import { ImageGenInterface } from './components/ImageGenInterface';
@@ -10,14 +11,8 @@ import { VideoGenInterface } from './components/VideoGenInterface';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { Logo } from './components/Logo';
 
-// Plain JS Constants instead of Enums
-const Modes = {
-  CHAT: 'CHAT', LIVE: 'LIVE', IMAGES: 'IMAGES', 
-  VISION: 'VISION', FAST: 'FAST', CODING: 'CODING', VIDEO: 'VIDEO'
-};
-
 export default function App() {
-  const [activeMode, setActiveMode] = useState(Modes.CHAT);
+  const [activeMode, setActiveMode] = useState(AppMode.CHAT);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
@@ -34,6 +29,11 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const handleCodeRedirect = (prompt) => {
+    setCodePrompt(prompt);
+    setActiveMode(AppMode.CODING);
+  };
+
   const NavItem = ({ mode, icon: Icon, label }) => {
     const isActive = activeMode === mode;
     return (
@@ -48,7 +48,7 @@ export default function App() {
             : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
         }`}
       >
-        <div className={`transition-all ${isActive ? 'scale-110' : 'group-hover:scale-110'}`}>
+        <div className={`transition-all duration-500 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`}>
           <Icon size={18} />
         </div>
         {(isSidebarOpen || isMobile) && (
@@ -61,16 +61,15 @@ export default function App() {
   };
 
   const renderContent = () => {
-    const props = { onCodeRequest: (p) => { setCodePrompt(p); setActiveMode(Modes.CODING); } };
     switch (activeMode) {
-      case Modes.CHAT: return <ChatInterface {...props} />;
-      case Modes.LIVE: return <LiveSession />;
-      case Modes.IMAGES: return <ImageGenInterface />;
-      case Modes.VIDEO: return <VideoGenInterface />;
-      case Modes.VISION: return <VisionInterface />;
-      case Modes.FAST: return <FastLab />;
-      case Modes.CODING: return <CodeWorkspace initialPrompt={codePrompt} onClearInitialPrompt={() => setCodePrompt('')} />;
-      default: return <ChatInterface {...props} />;
+      case AppMode.CHAT: return <ChatInterface onCodeRequest={handleCodeRedirect} />;
+      case AppMode.LIVE: return <LiveSession />;
+      case AppMode.IMAGES: return <ImageGenInterface />;
+      case AppMode.VIDEO: return <VideoGenInterface />;
+      case AppMode.VISION: return <VisionInterface />;
+      case AppMode.FAST: return <FastLab />;
+      case AppMode.CODING: return <CodeWorkspace initialPrompt={codePrompt} onClearInitialPrompt={() => setCodePrompt('')} />;
+      default: return <ChatInterface onCodeRequest={handleCodeRedirect} />;
     }
   };
 
@@ -82,13 +81,13 @@ export default function App() {
              <Logo size={20} />
            </div>
            <div className="flex flex-col gap-4">
-             <button onClick={() => setActiveMode(Modes.CHAT)} className={`p-2.5 rounded-xl ${activeMode === Modes.CHAT ? 'text-white bg-white/5' : 'text-slate-700 hover:text-slate-400'}`}><MessageCircle size={20} /></button>
-             <button onClick={() => setActiveMode(Modes.CODING)} className={`p-2.5 rounded-xl ${activeMode === Modes.CODING ? 'text-white bg-white/5' : 'text-slate-700 hover:text-slate-400'}`}><FileCode size={20} /></button>
-             <button onClick={() => setActiveMode(Modes.IMAGES)} className={`p-2.5 rounded-xl ${activeMode === Modes.IMAGES ? 'text-white bg-white/5' : 'text-slate-700 hover:text-slate-400'}`}><ImageIcon size={20} /></button>
+             <button onClick={() => setActiveMode(AppMode.CHAT)} className={`p-2.5 rounded-xl ${activeMode === AppMode.CHAT ? 'text-white bg-white/5' : 'text-slate-700 hover:text-slate-400'}`}><MessageCircle size={20} /></button>
+             <button onClick={() => setActiveMode(AppMode.CODING)} className={`p-2.5 rounded-xl ${activeMode === AppMode.CODING ? 'text-white bg-white/5' : 'text-slate-700 hover:text-slate-400'}`}><FileCode size={20} /></button>
+             <button onClick={() => setActiveMode(AppMode.IMAGES)} className={`p-2.5 rounded-xl ${activeMode === AppMode.IMAGES ? 'text-white bg-white/5' : 'text-slate-700 hover:text-slate-400'}`}><ImageIcon size={20} /></button>
            </div>
            <div className="mt-auto flex flex-col gap-4">
-             <button onClick={() => setIsKeyModalOpen(true)} className="p-2.5 rounded-xl text-slate-700 hover:text-indigo-400 transition-all"><Key size={20} /></button>
-             <button className="p-2.5 rounded-xl text-slate-700 hover:text-white transition-all"><Settings size={20} /></button>
+             <button onClick={() => setIsKeyModalOpen(true)} className="p-2.5 rounded-xl text-slate-700 hover:text-indigo-400"><Key size={20} /></button>
+             <button className="p-2.5 rounded-xl text-slate-700 hover:text-white"><Settings size={20} /></button>
            </div>
         </aside>
       )}
@@ -98,32 +97,25 @@ export default function App() {
           <div className="flex items-center justify-between">
              <div className="flex flex-col">
                <span className="text-lg font-normal tracking-tight text-white italic">TextGpt ai</span>
-               <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mt-0.5">Studio Core v4 JS</span>
+               <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mt-0.5">Vanilla Engine v4</span>
              </div>
              {isMobile && <button onClick={() => setIsSidebarOpen(false)} className="text-slate-500 p-2"><X size={20} /></button>}
           </div>
-
           <nav className="flex-1 space-y-8 overflow-y-auto no-scrollbar">
             <div>
               <p className="text-[10px] font-black text-slate-700 uppercase tracking-[0.3em] mb-4 ml-4">Neural Hub</p>
               <div className="space-y-1">
-                <NavItem mode={Modes.CHAT} icon={MessageCircle} label="Nexus Node" />
-                <NavItem mode={Modes.VISION} icon={Eye} label="Optic Scanner" />
-                <NavItem mode={Modes.LIVE} icon={Mic} label="Nebula Link" />
+                <NavItem mode={AppMode.CHAT} icon={MessageCircle} label="Nexus Node" />
+                <NavItem mode={AppMode.VISION} icon={Eye} label="Optic Scanner" />
+                <NavItem mode={AppMode.LIVE} icon={Mic} label="Nebula Link" />
               </div>
             </div>
             <div>
               <p className="text-[10px] font-black text-slate-700 uppercase tracking-[0.3em] mb-4 ml-4">Creative Engine</p>
               <div className="space-y-1">
-                <NavItem mode={Modes.IMAGES} icon={ImageIcon} label="Forge Studio" />
-                <NavItem mode={Modes.VIDEO} icon={Video} label="Veo Motion" />
-                <NavItem mode={Modes.FAST} icon={Zap} label="Quick Utilities" />
-              </div>
-            </div>
-            <div>
-              <p className="text-[10px] font-black text-slate-700 uppercase tracking-[0.3em] mb-4 ml-4">Dev Suite</p>
-              <div className="space-y-1">
-                <NavItem mode={Modes.CODING} icon={FileCode} label="Codespace IDE" />
+                <NavItem mode={AppMode.IMAGES} icon={ImageIcon} label="Forge Studio" />
+                <NavItem mode={AppMode.VIDEO} icon={Video} label="Veo Motion" />
+                <NavItem mode={AppMode.FAST} icon={Zap} label="Quick Utilities" />
               </div>
             </div>
           </nav>
@@ -137,13 +129,11 @@ export default function App() {
                <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-slate-600 hover:text-white transition-colors">
                  {isSidebarOpen ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
                </button>
-               <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em]">{activeMode} MODULE</span>
+               <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em]">{activeMode.replace('_', ' ')} MODULE</span>
              </div>
-             <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/5 rounded-full">
-                   <Command size={10} className="text-slate-700" />
-                   <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">K Neural Processing</span>
-                </div>
+             <div className="flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/5 rounded-full">
+                <Command size={10} className="text-slate-700" />
+                <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">K Neural Processing</span>
              </div>
           </header>
         )}

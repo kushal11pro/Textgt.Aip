@@ -1,12 +1,12 @@
-export const saveToHistory = <T>(key: string, data: T) => {
+export const saveToHistory = (key, data) => {
   try {
     localStorage.setItem(key, JSON.stringify(data));
   } catch (e) {
-    console.warn("Failed to save to history (likely storage limit reached):", e);
+    console.warn("Storage error", e);
   }
 };
 
-export const loadFromHistory = <T>(key: string, defaultValue: T): T => {
+export const loadFromHistory = (key, defaultValue) => {
   try {
     const item = localStorage.getItem(key);
     return item ? JSON.parse(item) : defaultValue;
@@ -15,6 +15,6 @@ export const loadFromHistory = <T>(key: string, defaultValue: T): T => {
   }
 };
 
-export const clearHistory = (key: string) => {
+export const clearHistory = (key) => {
   localStorage.removeItem(key);
 };
